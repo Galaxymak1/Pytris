@@ -1,6 +1,16 @@
 # CLI Tetris written in Python
 
-import random,time,os,msvcrt,asyncio
+import random,time,os,msvcrt,threading
+from threading import Thread
+
+from rich import print
+from rich.live import Live
+from rich.table import Table
+from rich.align import Align
+from rich.panel import Panel
+from rich.layout import Layout
+from rich.console import Group,Console
+
 
 cols, rows = 10, 20
 
@@ -70,12 +80,7 @@ class CurrentPiece:
     
     def rotate(self,grid,direction):
         future_shape = [row.copy() for row in self.shape]
-
-        if direction == "d":
-            future_shape = [list(row) for row in zip(*future_shape[::-1])]
-        elif direction == "q":
-            for _ in range(3):
-                future_shape = [list(row) for row in zip(*future_shape[::-1])]
+        future_shape = [list(row) for row in zip(*future_shape[::-1])]
         if not self.is_position_valid(grid,self.position,future_shape):
             return
         self.shape = future_shape
@@ -103,6 +108,8 @@ class Board:
             self.board[cell[1]][cell[0]] = "[]"
 
 
+def get_random_piece():
+    return random.choice(list(TETROMINOES.values()))
 
 
 class Game:
@@ -119,6 +126,8 @@ class Game:
         self.sleep_time = base_speed
         self.current_piece = CurrentPiece(get_random_piece())
         self.next_piece = get_random_piece()
+        self.console = Console()
+        self.lock = threading.Lock()
         pass
         
     def clear_full_line(self):
@@ -142,20 +151,58 @@ class Game:
     def update_speed(self):
         self.sleep_time = max(0.05, base_speed - 0.05 * self.level)
 
-    def draw_board(self):
+    def generate_screen(self):
         display = [row.copy() for row in self.board.board]
-        for y,part in enumerate(self.current_piece.shape):
-            for x,cell in enumerate(part):
+        for y, part in enumerate(self.current_piece.shape):
+            for x, cell in enumerate(part):
                 if cell == 1:
-                    display[self.current_piece.position[1]+y][self.current_piece.position[0]+x] = '[]'
+                    display[self.current_piece.position[1] + y][self.current_piece.position[0] + x] = "[]"
 
-        print(f"LEVEL: {self.level:<4}  SCORE: {self.score:<6}")          
-        for row in display:
-            print('<!' +' '.join(row) + '!>')
+        stats = f"[bold green]LEVEL:[/] {self.level}    [bold yellow]SCORE:[/] {self.score}"
+
+        table = self.generate_table(display)
+        next_piece_group = self.generate_next_piece()
+
+        layout = Layout()
+
+
+        layout.split_row(
+            Layout(table, name="left",ratio=3),
+            Layout(Group(Panel(stats,title="STATS"),Panel(Align.center(next_piece_group),title="NEXT PIECE")), name="right", ratio=1)
+        )
+
+        return Group(
+                    Align.center(Panel("[bold blue]PETRIS[/]", expand=False, border_style="blue")),
+                    layout,
+                )
         
-        # print("Next piece")       
-        # for row in self.next_piece:
-        #     print()     
+
+    def generate_next_piece(self) -> Table:
+        table = Table(
+            show_header=False,
+            show_lines=False,
+            box=None,
+            pad_edge=False,
+            expand=False,
+            padding=(0, 0), 
+        )
+        for row in self.next_piece:
+            table.add_row(*["🟦" if cell == 1 else "" for cell in row])
+              
+
+
+    def generate_table(self,display) -> Table:
+        table = Table(
+            show_header=False,
+            show_lines=False,
+            box=None,
+            pad_edge=False,
+            expand=False,
+            padding=(0, 0), 
+        )
+        for row in display:
+            table.add_row(*["🟦" if cell == "[]" else "⬜" for cell in row ])
+        return table
 
 
     def get_input(self):
@@ -177,40 +224,53 @@ class Game:
                         return
                 
     def handle_input(self):
-        input = self.get_input()
-        if input == "LEFT" or input == "RIGHT" or input == "DOWN":
-            self.board.try_move_piece(self.current_piece,input)
-        elif input == "q" or input == "d":
-            self.current_piece.rotate(self.board.board,input)
+        while self.is_game_running:
+            input = self.get_input()
+            if input == "LEFT" or input == "RIGHT" or input == "DOWN":
+                with self.lock:
+                    self.board.try_move_piece(self.current_piece,input)
+            elif input == "UP":
+                with self.lock:
+                    self.current_piece.rotate(self.board.board,input)
+
+    def auto_drop(self):
+        while self.is_game_running:
+            with self.lock:
+                if self.board.try_move_piece(self.current_piece,"DOWN"):
+                    self.get_new_piece()
+                    if not self.current_piece.is_position_valid(self.board.board,self.current_piece.position,self.current_piece.shape):
+                        self.is_game_running = False
+            self.tick()
+
     def get_new_piece(self):
         self.current_piece = CurrentPiece(self.next_piece)
         self.next_piece = get_random_piece()
 
-
     def tick(self):
         time.sleep(self.sleep_time) 
 
+    def render(self):
+        with Live(self.generate_screen(), console=self.console, refresh_per_second=20) as live:
+            while self.is_game_running:
+                with self.lock:
+                    self.clear_full_line()
+                live.update(self.generate_screen())  
+                
+
+
     def main_loop(self):
-        while True:
-            self.handle_input()
-            if self.board.try_move_piece(self.current_piece,"DOWN"):
-                self.get_new_piece()
-                if not self.current_piece.is_position_valid(self.board.board,self.current_piece.position,self.current_piece.shape):
-                    break
-            self.clear_full_line()
-            self.draw_board()
-            self.tick()
-            clear_screen()
-        print("Game Over")
+        clear_screen()
+        Thread(target=self.handle_input).start()
+        Thread(target=self.auto_drop).start()
+        self.render()
+
 
                         
-
-def get_random_piece():
-    return random.choice(list(TETROMINOES.values()))
 
 
 def game():
     game = Game()
+    game.is_game_running =  True
     game.main_loop()
     print("Game Over")
               
