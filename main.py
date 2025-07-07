@@ -1,10 +1,11 @@
 # CLI Tetris written in Python
 
-import random,time,os,msvcrt,threading
+import random,time,os,msvcrt,threading,rich,pygame
 from threading import Thread
 
 from rich import print
 from rich.live import Live
+import rich.style
 from rich.table import Table
 from rich.align import Align
 from rich.panel import Panel
@@ -13,7 +14,7 @@ from rich.console import Group,Console
 from rich.text import Text
 
 cols, rows = 10, 20
-
+rich.style.Style
 base_speed = 0.3
 
 TETROMINOES = {
@@ -51,7 +52,7 @@ def clear_screen():
 class CurrentPiece:
     def __init__(self,shape,color):
         self.shape = shape
-        self.position = [round(cols/2),0]
+        self.position = [cols // 2 - 2,0]
         self.color = color
         pass
     
@@ -92,7 +93,7 @@ class CurrentPiece:
         return True
     
     
-    def rotate(self,grid,direction):
+    def rotate(self,grid):
         future_shape = [row.copy() for row in self.shape]
         future_shape = [list(row) for row in zip(*future_shape[::-1])]
         if not self.is_position_valid(grid,self.position,future_shape):
@@ -158,9 +159,7 @@ class Game:
         if line_cleared == 0:
             return
         self.line_cleared += line_cleared
-        if line_cleared > 10:
-            line_cleared - 10
-            self.level += 1
+        self.level = self.line_cleared // 10
         self.score += self.rule[line_cleared] * self.level if self.level > 0 else self.rule[line_cleared]
         
     def update_speed(self):
@@ -173,7 +172,7 @@ class Game:
                 if cell == 1:
                     display[self.current_piece.position[1] + y][self.current_piece.position[0] + x] = ("[]", self.current_piece.color)
 
-        stats = f"[bold green]LEVEL:[/] {self.level}    [bold yellow]SCORE:[/] {self.score}"
+        stats = f"[bold green]LEVEL:[/] {self.level}    [bold yellow]SCORE:[/] {self.score}      [bold blue]LINE CLEARED:[/] {self.line_cleared}"
 
         table = self.generate_table(display)
         next_piece_group = self.generate_next_piece()
@@ -188,7 +187,7 @@ class Game:
         )
 
         return Group(
-                    Align.center(Panel("[bold blue]PETRIS[/]", expand=False, border_style="blue")),
+                    Align.center(Panel("[bold blue]PYTRIS[/]", expand=False, border_style="blue")),
                     layout,
                 )
         
@@ -227,8 +226,9 @@ class Game:
                     _, color = cell
                     block = BLOCK_MAP.get(color, "■")  
                     row_cells.append(block)
+
             table.add_row(*row_cells)
-        return table
+        return Panel(rich.padding.Padding(table,1))
 
 
     def get_input(self):
@@ -254,12 +254,15 @@ class Game:
             input = self.get_input()
             if input == "q":
                 self.is_game_running = False
-            elif input == "LEFT" or input == "RIGHT" or input == "DOWN":
+            elif input == "LEFT" or input == "RIGHT" :
                 with self.lock:
                     self.board.try_move_piece(self.current_piece,input)
+            elif input == "DOWN":
+                if not self.board.try_move_piece(self.current_piece,input):
+                    self.score += 1 * self.level + 1
             elif input == "UP":
                 with self.lock:
-                    self.current_piece.rotate(self.board.board,input)
+                    self.current_piece.rotate(self.board.board)
             
 
     def auto_drop(self):
@@ -279,7 +282,7 @@ class Game:
         time.sleep(self.sleep_time) 
 
     def render(self):
-        with Live(self.generate_screen(), console=self.console, refresh_per_second=20) as live:
+        with Live(self.generate_screen(), console=self.console, refresh_per_second=30) as live:
             while self.is_game_running:
                 with self.lock:
                     self.clear_full_line()
@@ -291,17 +294,21 @@ class Game:
         clear_screen()
         Thread(target=self.handle_input).start()
         Thread(target=self.auto_drop).start()
+        Thread(target=play_music, args=("tetris_theme.mp3",), daemon=True).start()
+
         self.render()
 
 
-                        
-
+def play_music(path: str):
+    pygame.mixer.init()
+    pygame.mixer.music.load(path)
+    pygame.mixer.music.set_volume(0.3)  
+    pygame.mixer.music.play(-1)                       
 
 def game():
     game = Game()
     game.is_game_running =  True
     game.main_loop()
-    print("Game Over")
               
 def main():
     game()
