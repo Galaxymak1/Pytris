@@ -10,29 +10,37 @@ from rich.align import Align
 from rich.panel import Panel
 from rich.layout import Layout
 from rich.console import Group,Console
-
+from rich.text import Text
 
 cols, rows = 10, 20
 
 base_speed = 0.3
 
 TETROMINOES = {
-    'I': [[1, 1, 1, 1]],
-    'O': [[1, 1],
-          [1, 1]],
-    'T': [[0, 1, 0],
-          [1, 1, 1]],
-    'S': [[0, 1, 1],
-          [1, 1, 0]],
-    'Z': [[1, 1, 0],
-          [0, 1, 1]],
-    'J': [[1, 0, 0],
-          [1, 1, 1]],
-    'L': [[0, 0, 1],
-          [1, 1, 1]],
+    'I': [[[1, 1, 1, 1]],"cyan"],
+    'O': [[[1, 1],
+          [1, 1]],"yellow"],
+    'T': [[[0, 1, 0],
+          [1, 1, 1]],"magenta"],
+    'S': [[[0, 1, 1],
+          [1, 1, 0]],"green"],
+    'Z': [[[1, 1, 0],
+          [0, 1, 1]],"red"],
+    'J': [[[1, 0, 0],
+          [1, 1, 1]],"brown"],
+    'L': [[[0, 0, 1],
+          [1, 1, 1]],"orange"],
 }
 
-
+BLOCK_MAP = {
+    "cyan": "🟦",
+    "yellow": "🟨",
+    "magenta": "🟪",
+    "green": "🟩",
+    "red": "🟥",
+    "brown": "🟫",
+    "orange": "🟧",
+}
 
 def clear_screen():
     if os.name == 'nt':  # For Windows
@@ -41,9 +49,10 @@ def clear_screen():
         os.system('clear')
         
 class CurrentPiece:
-    def __init__(self,shape):
+    def __init__(self,shape,color):
         self.shape = shape
         self.position = [round(cols/2),0]
+        self.color = color
         pass
     
     def get_covered_cells(self,position,shape):
@@ -73,7 +82,12 @@ class CurrentPiece:
     def is_position_valid(self,grid,position,shape):
         covered_cells = self.get_covered_cells(position,shape)
         for cell in covered_cells:
-            if cell[1] >= rows or cell[0] < 0 or cell[0] >= cols or grid[cell[1]][cell[0]] == '[]':
+            if (
+                cell[1] >= rows
+                or cell[0] < 0
+                or cell[0] >= cols
+                or grid[cell[1]][cell[0]] is not None
+            ):
                 return False
         return True
     
@@ -91,7 +105,7 @@ class CurrentPiece:
     
 class Board:
     def __init__(self):
-        self.board =  [[". " for _ in range(cols)]for _ in range(rows)]
+        self.board =  [[None for _ in range(cols)]for _ in range(rows)]
         pass
     
 
@@ -105,11 +119,12 @@ class Board:
     def land_piece(self,current_piece : CurrentPiece):
         cells = current_piece.get_covered_cells(current_piece.position,current_piece.shape)
         for cell in cells:
-            self.board[cell[1]][cell[0]] = "[]"
+            self.board[cell[1]][cell[0]] = ("[]",current_piece.color)
 
 
 def get_random_piece():
-    return random.choice(list(TETROMINOES.values()))
+    piece = random.choice(list(TETROMINOES.values()))
+    return piece[0],piece[1]
 
 
 class Game:
@@ -124,7 +139,7 @@ class Game:
         self.is_game_running = False
         self.board = Board()
         self.sleep_time = base_speed
-        self.current_piece = CurrentPiece(get_random_piece())
+        self.current_piece = CurrentPiece(*get_random_piece())
         self.next_piece = get_random_piece()
         self.console = Console()
         self.lock = threading.Lock()
@@ -133,9 +148,9 @@ class Game:
     def clear_full_line(self):
         line_cleared = 0
         for x in range(rows-1,0,-1):
-            if self.board.board[x].count("[]") == cols:
+            if all(cell is not None for cell in self.board.board[x]):
                 self.board.board.pop(x)
-                self.board.board.insert(0, [". " for _ in range(cols)])
+                self.board.board.insert(0, [None for _ in range(cols)])
                 line_cleared += 1
         self.update_score(line_cleared)
     
@@ -156,19 +171,20 @@ class Game:
         for y, part in enumerate(self.current_piece.shape):
             for x, cell in enumerate(part):
                 if cell == 1:
-                    display[self.current_piece.position[1] + y][self.current_piece.position[0] + x] = "[]"
+                    display[self.current_piece.position[1] + y][self.current_piece.position[0] + x] = ("[]", self.current_piece.color)
 
         stats = f"[bold green]LEVEL:[/] {self.level}    [bold yellow]SCORE:[/] {self.score}"
 
         table = self.generate_table(display)
         next_piece_group = self.generate_next_piece()
 
+        sidebar = Group(Panel(stats,title="STATS"),Panel(Align.center(next_piece_group),title="NEXT PIECE"))
         layout = Layout()
 
 
         layout.split_row(
-            Layout(table, name="left",ratio=3),
-            Layout(Group(Panel(stats,title="STATS"),Panel(Align.center(next_piece_group),title="NEXT PIECE")), name="right", ratio=1)
+            Layout(Align.center(table), name="left",size=30),
+            Layout(sidebar, name="right", size=20)
         )
 
         return Group(
@@ -186,8 +202,10 @@ class Game:
             expand=False,
             padding=(0, 0), 
         )
-        for row in self.next_piece:
-            table.add_row(*["🟦" if cell == 1 else "" for cell in row])
+        shape, color = self.next_piece
+        for row in shape:
+            table.add_row(*[BLOCK_MAP.get(color) if cell == 1 else "" for cell in row])
+        return table
               
 
 
@@ -201,7 +219,15 @@ class Game:
             padding=(0, 0), 
         )
         for row in display:
-            table.add_row(*["🟦" if cell == "[]" else "⬜" for cell in row ])
+            row_cells = []
+            for cell in row:
+                if cell is None:
+                    row_cells.append("⬜")
+                else:
+                    _, color = cell
+                    block = BLOCK_MAP.get(color, "■")  
+                    row_cells.append(block)
+            table.add_row(*row_cells)
         return table
 
 
@@ -226,12 +252,15 @@ class Game:
     def handle_input(self):
         while self.is_game_running:
             input = self.get_input()
-            if input == "LEFT" or input == "RIGHT" or input == "DOWN":
+            if input == "q":
+                self.is_game_running = False
+            elif input == "LEFT" or input == "RIGHT" or input == "DOWN":
                 with self.lock:
                     self.board.try_move_piece(self.current_piece,input)
             elif input == "UP":
                 with self.lock:
                     self.current_piece.rotate(self.board.board,input)
+            
 
     def auto_drop(self):
         while self.is_game_running:
@@ -243,7 +272,7 @@ class Game:
             self.tick()
 
     def get_new_piece(self):
-        self.current_piece = CurrentPiece(self.next_piece)
+        self.current_piece = CurrentPiece(*self.next_piece)
         self.next_piece = get_random_piece()
 
     def tick(self):
