@@ -1,6 +1,5 @@
 """Manage the rendering/UI of the game"""
 
-from array import array
 from rich.live import Live
 from rich.table import Table
 from rich.align import Align
@@ -9,7 +8,7 @@ from rich.layout import Layout
 from rich.console import Group,Console
 from rich.padding import Padding
 from config import BLOCK_MAP
-from piece import CurrentPiece
+from state import ScreenMode
 import os
 
 class UI:
@@ -27,11 +26,11 @@ class UI:
                           ("[]", current_piece.color)
         return render_grid
     
-    def generate_screen(self,state,next_piece,render_grid):
-        stats = f"[bold green]LEVEL:[/] {state.level}    [bold yellow]SCORE:[/] {state.score}      [bold blue]LINE CLEARED:[/] {state.lines}"
+    def generate_game_screen(self,game):
+        stats = f"[bold green]LEVEL:[/] {game.state.level}    [bold yellow]SCORE:[/] {game.state.score}      [bold blue]LINE CLEARED:[/] {game.state.lines}"
 
-        table = self.generate_table(render_grid)
-        next_piece_group = self.generate_next_piece(next_piece)
+        table = self.generate_table(self.generate_render_grid(game.board.board,game.current_piece))
+        next_piece_group = self.generate_next_piece(game.next_piece)
 
         sidebar = Group(Panel(stats,title="STATS"),Panel(Align.center(next_piece_group),title="NEXT PIECE"))
         layout = Layout()
@@ -47,7 +46,26 @@ class UI:
                     layout,
                 )
         
+    def generate_menu_screen(self):
+        return Align.center(
+            Panel(
+                "[bold cyan]Welcome to Pytris![/]\n\n[green]Press 's' to start[/]\n[red]Press 'q' to quit[/]",
+                title="Menu",
+                border_style="blue",
+                padding=(1, 4)
+            )
+        )
 
+    def generate_game_over_screen(self, score):
+        return Align.center(
+            Panel(
+                f"[bold red]Game Over![/]\n\nFinal Score: [yellow]{score}[/]\n\n[green]Press 'r' to restart\n[red]Press 'q' to quit[/]",
+                title="Game Over",
+                border_style="red",
+                padding=(1, 4)
+            )
+        )
+    
     def generate_next_piece(self,next_piece) -> Table:
         table = Table(
             show_header=False,
@@ -86,23 +104,20 @@ class UI:
             table.add_row(*row_cells)
         return Panel(Padding(table,1))
     
+    def generate_screen(self, game):
+        mode = game.state.screen
+        if mode == ScreenMode.MENU:
+            return self.generate_menu_screen()
+        elif mode == ScreenMode.PLAYING:
+            return self.generate_game_screen(game)
+        elif mode == ScreenMode.GAME_OVER:
+            return self.generate_game_over_screen(game.state.score)
 
-
-    def render(self,game):
-        
-        with Live(self.generate_screen(game.state,
-                                       game.next_piece,
-                                       self.generate_render_grid(game.board.board
-                                                                 ,game.current_piece)
-                                       ),
-                                         console=self.console,
-                                           refresh_per_second=30) as live:
+    def render(self, game):
+        with Live(self.generate_screen(game), console=self.console, refresh_per_second=30) as live:
             while game.state.is_running:
-                live.update(self.generate_screen(game.state,
-                                       game.next_piece,
-                                       self.generate_render_grid(game.board.board
-                                                                 ,game.current_piece)
-                                       ))  
+                live.update(self.generate_screen(game))
+                game.clear_full_line()
 
 
     def clear_screen(self):

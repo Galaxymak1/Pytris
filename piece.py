@@ -50,6 +50,6 @@ class CurrentPiece:
         future_shape = [row.copy() for row in self.shape]
         rotated_future_shape = [list(row) for row in zip(*future_shape[::-1])]
         if not self.is_position_valid(grid,self.position,rotated_future_shape):
-            return
+            return False
         self.shape = rotated_future_shape
-        return
+        return True
