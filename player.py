@@ -3,7 +3,6 @@
 from config import BASE_VOLUME,MUSIC
 from pygame import mixer
 from pygame.mixer import Sound
-import time
 
 class Player():
     def __init__(self):

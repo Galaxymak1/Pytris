@@ -102,6 +102,9 @@ You can adjust game parameters in `config.py`:
 - `SCORE_RULE`: Points per line clear
 - `TETROMINOES`: Shapes and colors
 - `BLOCK_MAP`: Emoji or character for each color
+- `BASE_BOLUME`: Change base volume of the game
+- `SOUNDS`: List of sounds used in the game
+- `MUSIC`: List of musics used in the game
 
 ---
 

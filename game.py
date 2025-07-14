@@ -8,7 +8,6 @@ from board import Board
 from ui import UI
 from player import Player
 from config import COLS,ROWS,TETROMINOES,BASE_SPEED,SCORE_RULE,SOUNDS,MUSIC
-# from main import play_music
 from state import GameState,ScreenMode
 
 
