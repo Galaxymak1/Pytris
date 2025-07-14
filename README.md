@@ -17,8 +17,8 @@ A terminal-based Tetris clone written in Python, featuring a rich interactive UI
 
 ## Demo
 
-![menu]("./demo/1.png")
-![game]("./demo/demo.gif")
+![menu](./demo/1.png)
+![game](./demo/demo.gif)
 
 ---
 
