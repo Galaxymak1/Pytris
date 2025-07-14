@@ -7,6 +7,7 @@ from rich.panel import Panel
 from rich.layout import Layout
 from rich.console import Group,Console
 from rich.padding import Padding
+from rich.text import Text
 from config import BLOCK_MAP
 from state import ScreenMode
 import os
@@ -43,28 +44,54 @@ class UI:
         return Group(
                     Align.center(Panel("[bold blue]PYTRIS[/]", expand=False,
                                        border_style="blue")),
-                    layout,
+                    Align.center(layout),
                 )
         
     def generate_menu_screen(self):
-        return Align.center(
-            Panel(
-                "[bold cyan]Welcome to Pytris![/]\n\n[green]Press 's' to start[/]\n[red]Press 'q' to quit[/]",
-                title="Menu",
-                border_style="blue",
-                padding=(1, 4)
+            title = Text("  PYTRIS  ", style="bold white on blue" )
+            menu_text = Text.assemble(
+                ("\n Press ", "white"),
+                ("S", "bold green"),
+                (" to Start", "white"),
+                ("\n Press ", "white"),
+                (" Q", "bold red"),
+                (" to Quit", "white"),
             )
-        )
+            help_panel = Panel(
+                "Use arrow keys to move pieces. Rotate with Up. Drop with Space.",
+                title="HELP",
+                border_style="yellow",
+                padding=(1, 2)
+            )
+            layout = Layout()
+            layout.split_column(
+                Layout(Align.center(Panel(title, padding=(1,4), border_style="blue")), size=5),
+                Layout(Align.center(menu_text), size=4),
+                Layout(Align.center(help_panel), size=5)
+            )
+            return Align.left(layout)
 
-    def generate_game_over_screen(self, score):
-        return Align.center(
-            Panel(
-                f"[bold red]Game Over![/]\n\nFinal Score: [yellow]{score}[/]\n\n[green]Press 'r' to restart\n[red]Press 'q' to quit[/]",
-                title="Game Over",
-                border_style="red",
-                padding=(1, 4)
-            )
+    def generate_game_over_screen(self, state):
+        title = Text(" GAME OVER ", style="bold white on red")
+        summary = Text.assemble(
+            (f"\n Score: {state.score}", "bold yellow"),
+            (f"\n Level: {state.level}", "bold green"),
+            (f"\n Lines: {state.lines}\n", "bold blue")
         )
+        options = Text.assemble(
+            ("\n Press ", "white"),
+            ("R", "bold green"),
+            (" to Restart", "white"),
+            ("\n Press ", "white"),
+            ("Q", "bold red"),
+            (" to Quit", "white")
+        )
+        panel = Panel(
+            Text.assemble(title, summary, options),
+            border_style="red",
+            padding=(1, 3)
+        )
+        return Align.center(panel)
     
     def generate_next_piece(self,next_piece) -> Table:
         table = Table(
@@ -111,7 +138,7 @@ class UI:
         elif mode == ScreenMode.PLAYING:
             return self.generate_game_screen(game)
         elif mode == ScreenMode.GAME_OVER:
-            return self.generate_game_over_screen(game.state.score)
+            return self.generate_game_over_screen(game.state)
 
     def render(self, game):
         with Live(self.generate_screen(game), console=self.console, refresh_per_second=30) as live:

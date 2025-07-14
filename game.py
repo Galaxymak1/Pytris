@@ -153,7 +153,7 @@ class Game:
                 continue
 
             if self.state.screen == ScreenMode.GAME_OVER:
-                self.ui.console.print(self.ui.generate_game_over_screen(self.state.score))
+                self.ui.console.print(self.ui.generate_game_over_screen(self.state))
                 choice = self.wait_for_key({'r', 'q'})
                 if choice == 'r':
                     self.reset_game()
